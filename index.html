@@ -1,0 +1,413 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="An interactive one-dimensional collision simulator. Add bodies, change their properties, and explore collision physics.">
+<title>1D Collision Simulator</title>
+<style>
+:root{color-scheme:light;--ink:#172033;--muted:#667085;--line:#dce2ea;--blue:#315efb;--bg:#f4f7fb;--card:#fff}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+button,input{font:inherit}
+.app{max-width:1440px;margin:0 auto;padding:24px}
+.heading{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:18px}
+h1{font-size:28px;margin:0 0 4px}.sub,.muted{color:var(--muted)}
+.layout{display:grid;grid-template-columns:minmax(330px,420px) minmax(0,1fr);gap:18px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;box-shadow:0 5px 18px #24324b0b}
+.controls{max-height:calc(100vh - 112px);overflow:auto}
+.section{font-size:12px;font-weight:750;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin:16px 0 9px}
+.section:first-child{margin-top:0}
+.body-card{border:1px solid var(--line);border-radius:11px;padding:12px;margin:10px 0}
+.body-title{display:flex;align-items:center;gap:8px;margin-bottom:9px;font-weight:700}
+.swatch{width:14px;height:14px;border-radius:50%;display:inline-block;border:1px solid #0002}
+.body-title .remove{margin-left:auto;padding:5px 9px}
+.body-fields,.general-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.field label{font-size:11px;color:var(--muted);display:block;margin:0 0 4px}
+input[type=number]{width:100%;padding:8px 9px;border:1px solid var(--line);border-radius:7px;color:var(--ink);background:white}
+input:focus{outline:2px solid #315efb45;border-color:var(--blue)}
+.actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+button,.download{border:0;border-radius:9px;padding:9px 13px;font-weight:650;cursor:pointer;text-decoration:none}
+button.primary{background:var(--blue);color:white}button.secondary,.download{background:#edf1f7;color:var(--ink)}
+button:disabled{opacity:.5;cursor:not-allowed}
+.status,.note{font-size:12px;line-height:1.5;margin:12px 0 0;color:var(--muted)}
+.status{min-height:18px;color:#3153b7}
+.visual{display:flex;flex-direction:column;gap:14px;min-width:0}
+.canvas-wrap{height:min(52vh,470px);min-height:300px;padding:10px}
+.canvas-wrap canvas{width:100%;height:100%;display:block}
+.playback{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.playback input{flex:1;min-width:140px;accent-color:var(--blue)}
+.clock{min-width:105px;text-align:right;color:var(--muted);font-variant-numeric:tabular-nums}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.stat{border:1px solid var(--line);border-radius:10px;padding:11px;min-width:0}
+.stat small{display:block;color:var(--muted);margin-bottom:4px}.stat strong{font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.table-wrap{overflow:auto}.results{width:100%;border-collapse:collapse;font-size:12px}
+.results th,.results td{text-align:left;padding:8px;border-bottom:1px solid var(--line);white-space:nowrap}
+.results th{color:var(--muted);font-weight:650}
+@media(max-width:900px){.layout{grid-template-columns:1fr}.controls{max-height:none}.stats{grid-template-columns:repeat(2,1fr)}.canvas-wrap{height:38vh}.heading{align-items:flex-start;flex-direction:column}}
+</style>
+</head>
+<body>
+<main class="app">
+  <header class="heading">
+    <div><h1>1D Collision Simulator</h1><div class="sub">Add bodies, adjust the physics, then play, scrub, or save the animation.</div></div>
+    <button id="downloadGif" class="download" type="button">Save animation GIF</button>
+  </header>
+  <div class="layout">
+    <section class="card controls" aria-label="Simulation controls">
+      <div class="section">Bodies <span id="bodyCount"></span></div>
+      <div id="bodies"></div>
+      <button id="addBody" class="secondary" type="button">+ Add body</button>
+
+      <div class="section">Collision and surface</div>
+      <div class="general-fields">
+        <div class="field"><label for="restitution">Restitution e (0–1)</label><input id="restitution" type="number" min="0" max="1" step=".05" value="1"></div>
+        <div class="field"><label for="friction">Surface friction μ</label><input id="friction" type="number" min="0" max="2" step=".01" value="0"></div>
+        <div class="field"><label for="gravity">Gravity g (m/s²)</label><input id="gravity" type="number" min="0" max="100" step=".1" value="9.81"></div>
+      </div>
+
+      <div class="section">Time and graph axis</div>
+      <div class="general-fields">
+        <div class="field"><label for="dt">Time step (s)</label><input id="dt" type="number" min=".001" step=".005" value=".01"></div>
+        <div class="field"><label for="duration">Duration (s)</label><input id="duration" type="number" min=".1" step=".5" value="5"></div>
+        <div class="field"><label for="axisMin">Axis minimum (optional)</label><input id="axisMin" type="number" step="any" placeholder="Auto"></div>
+        <div class="field"><label for="axisMax">Axis maximum (optional)</label><input id="axisMax" type="number" step="any" placeholder="Auto"></div>
+        <div class="field"><label for="speed">Playback speed</label><input id="speed" type="number" min=".1" max="5" step=".1" value="1"></div>
+      </div>
+
+      <div class="actions">
+        <button id="update" class="primary" type="button">Update simulation</button>
+        <button id="reset" class="secondary" type="button">Reset example</button>
+      </div>
+      <div id="status" class="status" role="status" aria-live="polite">Preparing simulation…</div>
+      <p class="note">Set velocity to 0 for a body at rest; negative velocity moves left. Surface friction slows bodies on the track; restitution controls how bouncy the impacts are. Up to eight bodies are supported. This page is self-contained and works on GitHub Pages without Python or a server.</p>
+    </section>
+
+    <section class="visual" aria-label="Simulation output">
+      <div class="card canvas-wrap"><canvas id="scene" aria-label="Animated one-dimensional collision"></canvas></div>
+      <div class="card playback">
+        <button id="play" class="primary" type="button">Pause</button>
+        <button id="replay" class="secondary" type="button">Replay</button>
+        <input id="scrubber" type="range" min="0" max="0" value="0" aria-label="Animation frame">
+        <span id="clock" class="clock">0.00 / 0.00 s</span>
+      </div>
+      <div class="stats">
+        <div class="stat"><small>Total momentum</small><strong id="momentum">—</strong></div>
+        <div class="stat"><small>Total kinetic energy</small><strong id="energy">—</strong></div>
+        <div class="stat"><small>Collisions</small><strong id="collision">—</strong></div>
+        <div class="stat"><small>Net friction force</small><strong id="force">—</strong></div>
+        <div class="stat"><small>Impact force this step (average)</small><strong id="impactForce">—</strong></div>
+      </div>
+      <div class="card table-wrap">
+        <div class="section">Final state and forces</div>
+        <table class="results">
+          <thead><tr><th>Body</th><th>Final position (m)</th><th>Final velocity (m/s)</th><th>Kinetic energy (J)</th><th>Friction force (N)</th></tr></thead>
+          <tbody id="finalRows"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+</main>
+<script>
+"use strict";
+const MAX_BODIES=8,MAX_FRAMES=4000;
+const COLORS=["#315efb","#ee4b5a","#16a085","#e69b21","#8b5cf6","#e25bb2","#517b37","#385d70"];
+const EXAMPLE=[
+  {mass:2,radius:.3,position:2,velocity:3},
+  {mass:2,radius:.3,position:8,velocity:1},
+  {mass:1.5,radius:.3,position:14,velocity:0}
+];
+const $=id=>document.getElementById(id);
+const bodyHost=$("bodies"),canvas=$("scene"),ctx=canvas.getContext("2d"),status=$("status");
+let bodies=structuredClone(EXAMPLE),simulation=null,frame=0,playing=true,lastTick=0,raf=0;
+
+function renderBodies(){
+  bodyHost.replaceChildren();
+  bodies.forEach((body,index)=>{
+    const card=document.createElement("div");card.className="body-card";
+    const title=document.createElement("div");title.className="body-title";
+    const swatch=document.createElement("i");swatch.className="swatch";swatch.style.background=COLORS[index%COLORS.length];
+    const name=document.createElement("span");name.textContent=`Body ${index+1}`;
+    title.append(swatch,name);
+    if(bodies.length>2){
+      const remove=document.createElement("button");remove.className="secondary remove";remove.type="button";remove.textContent="Remove";
+      remove.addEventListener("click",()=>{bodies.splice(index,1);renderBodies();updateSimulation()});
+      title.append(remove);
+    }
+    card.append(title);
+    const grid=document.createElement("div");grid.className="body-fields";
+    for(const [key,label,step] of [["mass","Mass (kg)",".1"],["radius","Radius (m)",".05"],["position","Initial position (m)","any"],["velocity","Initial velocity (m/s)","any"]]){
+      const field=document.createElement("div");field.className="field";
+      const lab=document.createElement("label");lab.textContent=label;lab.htmlFor=`body-${index}-${key}`;
+      const input=document.createElement("input");input.type="number";input.step=step;input.id=lab.htmlFor;input.value=body[key];input.setAttribute("aria-label",`Body ${index+1} ${label}`);
+      input.addEventListener("input",()=>{if(input.value.trim()!=="")body[key]=Number(input.value)});
+      field.append(lab,input);grid.append(field);
+    }
+    card.append(grid);bodyHost.append(card);
+  });
+  $("bodyCount").textContent=`(${bodies.length}/${MAX_BODIES})`;
+  $("addBody").disabled=bodies.length>=MAX_BODIES;
+}
+
+function readParameters(){
+  const optional=id=>$(id).value.trim()===""?null:Number($(id).value);
+  return {
+    bodies:bodies.map(body=>({...body})),
+    restitution:Number($("restitution").value),friction:Number($("friction").value),
+    gravity:Number($("gravity").value),dt:Number($("dt").value),duration:Number($("duration").value),
+    axisMin:optional("axisMin"),axisMax:optional("axisMax"),speed:Number($("speed").value)
+  };
+}
+
+function validate(p){
+  if(p.bodies.length<2||p.bodies.length>MAX_BODIES)throw Error(`Use between 2 and ${MAX_BODIES} bodies.`);
+  for(let i=0;i<p.bodies.length;i++){
+    const body=p.bodies[i];
+    for(const key of ["mass","radius","position","velocity"])if(!Number.isFinite(body[key]))throw Error(`Enter a valid ${key} for body ${i+1}.`);
+    if(body.mass<=0||body.radius<=0)throw Error(`Body ${i+1}: mass and radius must be greater than zero.`);
+  }
+  if(!Number.isFinite(p.restitution)||p.restitution<0||p.restitution>1)throw Error("Restitution must be between 0 and 1.");
+  if(!Number.isFinite(p.friction)||p.friction<0||p.friction>2)throw Error("Surface friction μ must be between 0 and 2.");
+  if(!Number.isFinite(p.gravity)||p.gravity<0)throw Error("Gravity must be zero or positive.");
+  if(!Number.isFinite(p.dt)||p.dt<=0||!Number.isFinite(p.duration)||p.duration<=0||Math.ceil(p.duration/p.dt)>MAX_FRAMES)throw Error(`Choose a positive time step and duration with at most ${MAX_FRAMES} frames.`);
+  if(!Number.isFinite(p.speed)||p.speed<=0)throw Error("Playback speed must be greater than zero.");
+  if((p.axisMin!==null&&!Number.isFinite(p.axisMin))||(p.axisMax!==null&&!Number.isFinite(p.axisMax)))throw Error("Axis limits must be blank or valid numbers.");
+  if(p.axisMin!==null&&p.axisMax!==null&&p.axisMin>=p.axisMax)throw Error("Axis minimum must be less than maximum.");
+}
+
+function simulate(p){
+  const count=Math.ceil(p.duration/p.dt),positions=p.bodies.map(body=>body.position),velocities=p.bodies.map(body=>body.velocity);
+  const frames=[],collisions=[],frictionAcceleration=p.friction*p.gravity;
+  function saveFrame(time,impactForce=0){
+    const friction=velocities.map((velocity,index)=>velocity===0||frictionAcceleration===0?0:-Math.sign(velocity)*p.bodies[index].mass*frictionAcceleration);
+    frames.push({
+      t:time,x:[...positions],v:[...velocities],
+      momentum:velocities.reduce((sum,v,i)=>sum+p.bodies[i].mass*v,0),
+      energy:velocities.reduce((sum,v,i)=>sum+.5*p.bodies[i].mass*v*v,0),
+      friction,netFriction:friction.reduce((sum,f)=>sum+f,0),impactForce
+    });
+  }
+  saveFrame(0);
+  for(let step=0;step<count;step++){
+    let remaining=p.dt,elapsed=0,impactForce=0,eventCount=0;
+    while(remaining>1e-12){
+      let earliest=null;
+      for(let i=0;i<p.bodies.length;i++)for(let j=i+1;j<p.bodies.length;j++){
+        const delta=positions[j]-positions[i],direction=delta>=0?1:-1;
+        const gap=Math.abs(delta)-p.bodies[i].radius-p.bodies[j].radius;
+        const closingSpeed=-direction*(velocities[j]-velocities[i]);
+        if(closingSpeed<=1e-12)continue;
+        const impactTime=Math.max(0,gap/closingSpeed);
+        if(impactTime<=remaining&&(earliest===null||impactTime<earliest.time))earliest={time:impactTime,i,j,direction};
+      }
+      if(earliest===null){
+        for(let i=0;i<positions.length;i++)positions[i]+=velocities[i]*remaining;
+        elapsed+=remaining;remaining=0;break;
+      }
+      const {time:impactTime,i,j,direction}=earliest;
+      for(let k=0;k<positions.length;k++)positions[k]+=velocities[k]*impactTime;
+      elapsed+=impactTime;remaining-=impactTime;
+      const minDistance=p.bodies[i].radius+p.bodies[j].radius;
+      const overlap=minDistance-Math.abs(positions[j]-positions[i]);
+      if(overlap>0){
+        const sumMass=p.bodies[i].mass+p.bodies[j].mass;
+        positions[i]-=direction*overlap*p.bodies[j].mass/sumMass;
+        positions[j]+=direction*overlap*p.bodies[i].mass/sumMass;
+      }
+      const beforeI=velocities[i],beforeJ=velocities[j],massI=p.bodies[i].mass,massJ=p.bodies[j].mass;
+      velocities[i]=((massI-p.restitution*massJ)*beforeI+(1+p.restitution)*massJ*beforeJ)/(massI+massJ);
+      velocities[j]=((massJ-p.restitution*massI)*beforeJ+(1+p.restitution)*massI*beforeI)/(massI+massJ);
+      impactForce=Math.max(impactForce,Math.abs(massI*(velocities[i]-beforeI))/p.dt);
+      collisions.push({time:step*p.dt+elapsed,position:(positions[i]+positions[j])/2,first:i,second:j});
+      eventCount++;
+      if(eventCount>=p.bodies.length*p.bodies.length*2)throw Error("Too many collisions in one step; reduce the time step.");
+      if(impactTime<=1e-12&&Math.abs(velocities[j]-velocities[i])<=1e-12)break;
+    }
+    for(let i=0;i<velocities.length;i++){
+      const amount=frictionAcceleration*p.dt;
+      if(Math.abs(velocities[i])<=amount)velocities[i]=0;
+      else velocities[i]-=Math.sign(velocities[i])*amount;
+    }
+    saveFrame(Math.min((step+1)*p.dt,p.duration),impactForce);
+  }
+  return {parameters:p,frames,collisions};
+}
+
+function axisRange(p){
+  let low=Infinity,high=-Infinity;
+  for(const state of simulation.frames)for(let i=0;i<p.bodies.length;i++){
+    low=Math.min(low,state.x[i]-p.bodies[i].radius);high=Math.max(high,state.x[i]+p.bodies[i].radius);
+  }
+  const margin=Math.max((high-low)*.08,1);
+  return [p.axisMin??low-margin,p.axisMax??high+margin];
+}
+
+function drawFrame(){
+  if(!simulation)return;
+  const dpr=window.devicePixelRatio||1,width=canvas.width/dpr,height=canvas.height/dpr;
+  ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,width,height);
+  const p=simulation.parameters,state=simulation.frames[frame];
+  const pad={left:58,right:26,top:60,bottom:48},plotWidth=width-pad.left-pad.right,mid=pad.top+(height-pad.top-pad.bottom)/2;
+  const [low,high]=axisRange(p),pixel=x=>pad.left+(x-low)/(high-low)*plotWidth;
+  ctx.fillStyle="#172033";ctx.font="600 16px system-ui";ctx.textAlign="center";
+  ctx.fillText(`${p.bodies.length} bodies · e ${p.restitution} · friction μ ${p.friction}`,width/2,28);
+  ctx.strokeStyle="#1e293b";ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(pad.left,mid);ctx.lineTo(width-pad.right,mid);ctx.stroke();
+  ctx.strokeStyle="#cbd5e1";ctx.lineWidth=1;ctx.fillStyle="#667085";ctx.font="12px system-ui";
+  for(let i=0;i<=5;i++){const x=pad.left+plotWidth*i/5;ctx.beginPath();ctx.moveTo(x,mid-5);ctx.lineTo(x,mid+5);ctx.stroke();ctx.textAlign="center";ctx.fillText((low+(high-low)*i/5).toFixed(1),x,height-pad.bottom+18)}
+  ctx.fillStyle="#667085";ctx.fillText("Position (m)",width/2,height-8);
+  for(const collision of simulation.collisions){if(collision.time>state.t)break;ctx.save();ctx.strokeStyle="#a3aab5";ctx.setLineDash([5,5]);ctx.beginPath();ctx.moveTo(pixel(collision.position),pad.top);ctx.lineTo(pixel(collision.position),height-pad.bottom);ctx.stroke();ctx.restore()}
+  for(let i=0;i<p.bodies.length;i++){
+    const body=p.bodies[i],cx=pixel(state.x[i]),radius=Math.max(18,Math.min(40,body.radius/(high-low)*plotWidth));
+    ctx.beginPath();ctx.arc(cx,mid,radius,0,Math.PI*2);ctx.fillStyle=COLORS[i%COLORS.length];ctx.fill();ctx.strokeStyle="#172033";ctx.lineWidth=1.5;ctx.stroke();
+    ctx.fillStyle="#fff";ctx.font=`bold ${Math.max(10,Math.min(14,radius*.48))}px system-ui`;ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText(`${body.mass}kg`,cx,mid);ctx.textBaseline="alphabetic";
+    ctx.fillStyle="#172033";ctx.font="11px system-ui";ctx.fillText(`B${i+1}`,cx,mid-radius-6);
+  }
+  const stateLabel=simulation.collisions.length?(state.t>=simulation.collisions[0].time?"collision occurred":"before collision"):"no collision";
+  ctx.fillStyle="#172033";ctx.font="13px system-ui";ctx.textAlign="left";ctx.fillText(`t = ${state.t.toFixed(2)} s · ${stateLabel}`,pad.left,pad.top+18);
+  $("clock").textContent=`${state.t.toFixed(2)} / ${simulation.frames.at(-1).t.toFixed(2)} s`;
+  $("momentum").textContent=`${state.momentum.toFixed(3)} kg·m/s`;$("energy").textContent=`${state.energy.toFixed(3)} J`;
+  $("collision").textContent=`${simulation.collisions.length} · first ${simulation.collisions.length?simulation.collisions[0].time.toFixed(2)+" s":"none"}`;
+  $("force").textContent=`${state.netFriction.toFixed(3)} N`;$("impactForce").textContent=`${state.impactForce.toFixed(3)} N`;
+  $("scrubber").value=frame;
+}
+
+function renderFinalTable(){
+  const p=simulation.parameters,last=simulation.frames.at(-1),host=$("finalRows");host.replaceChildren();
+  p.bodies.forEach((body,index)=>{
+    const row=document.createElement("tr"),name=document.createElement("td"),swatch=document.createElement("i");
+    swatch.className="swatch";swatch.style.background=COLORS[index%COLORS.length];name.append(swatch,document.createTextNode(` Body ${index+1} · ${body.mass} kg`));row.append(name);
+    for(const value of [last.x[index].toFixed(3),last.v[index].toFixed(3),(.5*body.mass*last.v[index]**2).toFixed(3),last.friction[index].toFixed(3)]){
+      const cell=document.createElement("td");cell.textContent=value;row.append(cell);
+    }
+    host.append(row);
+  });
+}
+
+function resizeCanvas(){
+  const rect=canvas.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  canvas.width=Math.max(1,Math.round(rect.width*dpr));canvas.height=Math.max(1,Math.round(rect.height*dpr));
+  if(simulation)drawFrame();
+}
+
+function animate(now){
+  if(!playing||!simulation)return;
+  if(!lastTick)lastTick=now;
+  const interval=1000/30/$("speed").value;
+  if(now-lastTick>=interval){
+    frame=Math.min(simulation.frames.length-1,frame+Math.max(1,Math.floor((now-lastTick)/interval)));lastTick=now;drawFrame();
+    if(frame===simulation.frames.length-1){playing=false;$("play").textContent="Play"}
+  }
+  raf=requestAnimationFrame(animate);
+}
+function startPlayback(){
+  if(!simulation)return;playing=true;lastTick=0;$("play").textContent="Pause";
+  cancelAnimationFrame(raf);raf=requestAnimationFrame(animate);
+}
+
+async function updateSimulation(){
+  const button=$("update");button.disabled=true;
+  try{
+    const parameters=readParameters();validate(parameters);status.textContent="Calculating simulation…";
+    simulation=simulate(parameters);frame=0;$("scrubber").max=simulation.frames.length-1;renderFinalTable();resizeCanvas();startPlayback();
+    status.textContent=`Ready: ${simulation.collisions.length} collision(s).`;
+  }catch(error){status.textContent=error.message}
+  finally{button.disabled=false}
+}
+
+function byteArrayToBase64(bytes){
+  let binary="";const chunk=0x8000;
+  for(let i=0;i<bytes.length;i+=chunk)binary+=String.fromCharCode(...bytes.subarray(i,i+chunk));
+  return btoa(binary);
+}
+
+function encodeGif(width,height,frames,delayCs){
+  const out=[];
+  const byte=n=>out.push(n&255),word=n=>{byte(n);byte(n>>8)},ascii=s=>{for(const c of s)byte(c.charCodeAt(0))};
+  ascii("GIF89a");word(width);word(height);byte(0xf7);byte(0);byte(0);
+  for(let i=0;i<256;i++){
+    byte(((i>>5)&7)*255/7);byte(((i>>2)&7)*255/7);byte((i&3)*255/3);
+  }
+  ascii("!\xff\x0bNETSCAPE2.0");byte(3);byte(1);word(0);byte(0);
+  for(const indices of frames){
+    byte(0x21);byte(0xf9);byte(4);byte(0);word(delayCs);byte(0);byte(0);
+    byte(0x2c);word(0);word(0);word(width);word(height);byte(0);
+    byte(8);
+    const clear=256,end=257;let nextCode=258,codeSize=9,dict=new Map(),packed=[],bitBuffer=0,bitCount=0;
+    const emit=code=>{bitBuffer|=code<<bitCount;bitCount+=codeSize;while(bitCount>=8){packed.push(bitBuffer&255);bitBuffer>>=8;bitCount-=8}};
+    emit(clear);
+    if(indices.length){
+      let prefix=indices[0];
+      for(let i=1;i<indices.length;i++){
+        const symbol=indices[i],key=prefix*256+symbol,candidate=dict.get(key);
+        if(candidate!==undefined){prefix=candidate;continue}
+        emit(prefix);
+        if(nextCode<4096){
+          dict.set(key,nextCode++);
+          if(nextCode>(1<<codeSize)&&codeSize<12)codeSize++;
+        }else{
+          emit(clear);dict=new Map();nextCode=258;codeSize=9;
+        }
+        prefix=symbol;
+      }
+      emit(prefix);
+    }
+    emit(end);
+    if(bitCount>0)packed.push(bitBuffer&255);
+    for(let i=0;i<packed.length;i+=255){const block=packed.slice(i,i+255);byte(block.length);out.push(...block)}
+    byte(0);
+  }
+  byte(0x3b);
+  return new Uint8Array(out);
+}
+
+async function saveGif(){
+  if(!simulation){status.textContent="Update the simulation before exporting.";return}
+  const button=$("downloadGif");button.disabled=true;status.textContent="Rendering GIF frames…";
+  try{
+    const width=640,height=220,total=simulation.frames.length;
+    const desired=Math.min(120,Math.max(2,Math.ceil(simulation.parameters.duration*15)));
+    const indices=total===1?[0]:Array.from({length:desired},(_,i)=>Math.round(i*(total-1)/(desired-1)));
+    const sample=document.createElement("canvas");sample.width=width;sample.height=height;
+    const sampleCtx=sample.getContext("2d",{willReadFrequently:true}),gifFrames=[];
+    const priorFrame=frame,wasPlaying=playing;playing=false;cancelAnimationFrame(raf);
+    for(let n=0;n<indices.length;n++){
+      frame=indices[n];drawFrame();
+      sampleCtx.fillStyle="#fff";sampleCtx.fillRect(0,0,width,height);sampleCtx.drawImage(canvas,0,0,width,height);
+      const rgba=sampleCtx.getImageData(0,0,width,height).data,pixels=new Uint8Array(width*height);
+      for(let i=0,j=0;i<rgba.length;i+=4,j++)pixels[j]=((rgba[i]>>5)<<5)|((rgba[i+1]>>5)<<2)|(rgba[i+2]>>6);
+      gifFrames.push(pixels);
+      if(n%8===0){status.textContent=`Rendering GIF frames… ${n+1}/${indices.length}`;await new Promise(resolve=>setTimeout(resolve,0))}
+    }
+    const delay=Math.max(4,Math.round(100/Math.min(15,indices.length/simulation.parameters.duration)));
+    const bytes=encodeGif(width,height,gifFrames,delay),url=URL.createObjectURL(new Blob([bytes],{type:"image/gif"}));
+    const link=document.createElement("a");link.href=url;link.download="collision_animation.gif";link.click();
+    setTimeout(()=>URL.revokeObjectURL(url),60_000);
+    status.textContent=`GIF downloaded (${indices.length} frames).`;
+    frame=priorFrame;drawFrame();if(wasPlaying&&priorFrame<simulation.frames.length-1)startPlayback();
+  }catch(error){status.textContent=`Could not export GIF: ${error.message}`}
+  finally{button.disabled=false}
+}
+
+$("addBody").addEventListener("click",()=>{
+  if(bodies.length>=MAX_BODIES)return;
+  const previous=bodies.at(-1);bodies.push({mass:1,radius:.3,position:previous.position+previous.radius+.4,velocity:0});
+  renderBodies();updateSimulation();
+});
+$("update").addEventListener("click",updateSimulation);
+$("reset").addEventListener("click",()=>{
+  bodies=structuredClone(EXAMPLE);$("restitution").value="1";$("friction").value="0";$("gravity").value="9.81";
+  $("dt").value=".01";$("duration").value="5";$("axisMin").value="";$("axisMax").value="";$("speed").value="1";
+  renderBodies();updateSimulation();
+});
+$("downloadGif").addEventListener("click",saveGif);
+$("play").addEventListener("click",()=>{
+  if(playing){playing=false;cancelAnimationFrame(raf);$("play").textContent="Play"}
+  else{if(frame===simulation.frames.length-1)frame=0;startPlayback()}
+});
+$("replay").addEventListener("click",()=>{frame=0;startPlayback()});
+$("scrubber").addEventListener("input",event=>{frame=Number(event.target.value);drawFrame()});
+window.addEventListener("resize",resizeCanvas);
+renderBodies();resizeCanvas();updateSimulation();
+</script>
+</body>
+</html>
