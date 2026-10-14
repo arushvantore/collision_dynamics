@@ -12,6 +12,9 @@ body{margin:0;background:var(--bg);color:var(--ink);font:14px system-ui,-apple-s
 button,input{font:inherit}
 .app{max-width:1440px;margin:0 auto;padding:24px}
 .heading{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:18px}
+.header-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.lab-link{border-radius:9px;padding:9px 13px;background:#172033;color:#fff;font-weight:650;text-decoration:none}
+.lab-link:hover{background:#263754}
 h1{font-size:28px;margin:0 0 4px}.sub,.muted{color:var(--muted)}
 .layout{display:grid;grid-template-columns:minmax(330px,420px) minmax(0,1fr);gap:18px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;box-shadow:0 5px 18px #24324b0b}
@@ -51,7 +54,10 @@ button:disabled{opacity:.5;cursor:not-allowed}
 <main class="app">
   <header class="heading">
     <div><h1>1D Collision Simulator</h1><div class="sub">Add bodies, adjust the physics, then play, scrub, or save the animation.</div></div>
-    <button id="downloadGif" class="download" type="button">Save animation GIF</button>
+    <div class="header-actions">
+      <a class="lab-link" href="./crash-lab.html">Explore the 3D Crash Lab</a>
+      <button id="downloadGif" class="download" type="button">Save animation GIF</button>
+    </div>
   </header>
   <div class="layout">
     <section class="card controls" aria-label="Simulation controls">
